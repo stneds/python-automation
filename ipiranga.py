@@ -19,7 +19,7 @@ URL_HOME = "https://www.redeipiranga.com.br/wps/myportal/redeipiranga/homeoutros
 
 ARQUIVO_JSON_GOOGLE = "dados-google.json"
 NOME_ARQUIVO_MODELO = "Preço teste TRRs %m/%y"
-INTERVALO_LEITURA = "A1:AD1000"
+INTERVALO_LEITURA = "A1:U1000"
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -60,29 +60,65 @@ def wait(driver, timeout=20):
 
 def aguardar_login_manual(driver):
     driver.get(URL_HOME)
-    print("Faça o login manual no portal da Ipiranga.")
-    print("Depois que entrar e estiver na home, volte no terminal e aperte ENTER.")
+    print("Faça o login manual no portal da Ipiranga.\nDepois que entrar e estiver na home, volte no terminal e aperte ENTER.")
     input()
 
 
 def abrir_popup_cliente(driver):
     w = wait(driver, 20)
 
+    def localizar_campo_busca():
+        xpaths_input = [
+            "//input[contains(@placeholder,'Razão Social') or contains(@placeholder,'CNPJ')]",
+            "//input[contains(@placeholder,'Razao Social') or contains(@placeholder,'CNPJ')]",
+            "//input[contains(@placeholder,'Buscar') and (contains(@placeholder,'CNPJ') or contains(@placeholder,'Raz'))]",
+        ]
+        for xp in xpaths_input:
+            for el in driver.find_elements(By.XPATH, xp):
+                try:
+                    if el.is_displayed() and el.is_enabled():
+                        return el
+                except Exception:
+                    continue
+        return None
+
     tentativas = [
+        (By.XPATH, "//button[contains(@title, 'Troca de Razão Social') or contains(@aria-label, 'Troca de Razão Social') or contains(., 'Troca de Razão Social')]"),
+        (By.XPATH, "//*[contains(., 'Troca de Razão Social')]/ancestor::*[self::button or self::div][1]"),
         (By.XPATH, "//*[contains(., 'CNPJ:')]/ancestor::*[self::div or self::button][1]"),
-        (By.XPATH, "//*[contains(., 'Neoagro Diesel Ltda')]"),
+        (By.XPATH, "//*[contains(., 'Neoagro Diesel Ltda')]/ancestor::*[self::div or self::button][1]"),
+        (By.XPATH, "//button[.//*[name()='svg'] and (contains(@title, 'Troca') or contains(@aria-label, 'Troca'))]"),
     ]
 
     for by, xp in tentativas:
         try:
-            el = w.until(EC.element_to_be_clickable((by, xp)))
-            driver.execute_script("arguments[0].click();", el)
-            time.sleep(2)
-            return
+            candidatos = driver.find_elements(by, xp)
+            if not candidatos:
+                continue
+
+            for el in candidatos:
+                try:
+                    if not el.is_displayed():
+                        continue
+                    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", el)
+                    driver.execute_script("arguments[0].click();", el)
+                    time.sleep(1.5)
+                    if localizar_campo_busca() is not None:
+                        return
+                except Exception:
+                    continue
         except Exception:
             continue
 
-    raise RuntimeError("Não consegui abrir o seletor de cliente/CNPJ.")
+    print("Não consegui abrir automaticamente o seletor de Razão Social.")
+    print("No site, clique no botão/ícone 'Troca de Razão Social' e aguarde abrir o popup.")
+    input("Depois de abrir o popup com o campo de busca, pressione ENTER para continuar...")
+
+    try:
+        w.until(lambda d: localizar_campo_busca() is not None)
+        return
+    except Exception:
+        raise RuntimeError("Popup de seleção de cliente não abriu (campo de CNPJ não encontrado).")
 
 
 def escolher_cnpj(driver, base: BaseConfig):
@@ -90,22 +126,75 @@ def escolher_cnpj(driver, base: BaseConfig):
 
     w = wait(driver, 20)
 
-    campo = w.until(
-        EC.presence_of_element_located(
-            (By.XPATH, "//input[contains(@placeholder,'Razão Social') or contains(@placeholder,'CNPJ')]")
+    def localizar_campo_busca():
+        xpaths_input = [
+            "//input[contains(@placeholder,'Razão Social') or contains(@placeholder,'CNPJ')]",
+            "//input[contains(@placeholder,'Razao Social') or contains(@placeholder,'CNPJ')]",
+            "//input[contains(@placeholder,'Buscar') and (contains(@placeholder,'CNPJ') or contains(@placeholder,'Raz'))]",
+        ]
+        for xp in xpaths_input:
+            for el in driver.find_elements(By.XPATH, xp):
+                try:
+                    if el.is_displayed() and el.is_enabled():
+                        return el
+                except Exception:
+                    continue
+        return None
+
+    w.until(lambda d: localizar_campo_busca() is not None)
+    campo = localizar_campo_busca()
+
+    if campo is None:
+        raise RuntimeError("Campo de CNPJ/Razão Social não está visível para interação.")
+
+    driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", campo)
+    campo.click()
+
+    try:
+        campo.clear()
+        campo.send_keys(base.cnpj)
+    except Exception:
+        # Fallback para inputs controlados por framework que ignoram clear/send_keys.
+        driver.execute_script(
+            """
+            const el = arguments[0];
+            const value = arguments[1];
+            el.value = '';
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+            el.value = value;
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+            """,
+            campo,
+            base.cnpj,
         )
-    )
-    campo.clear()
-    campo.send_keys(base.cnpj)
+
     time.sleep(2)
 
-    xpath_card = (
-        f"//*[contains(., '{base.cnpj}') and contains(., '{base.uf_cidade}') and contains(., '{base.ponto_entrega}')]"
-    )
-    card = w.until(EC.presence_of_element_located((By.XPATH, xpath_card)))
+    xpath_cards = [
+        f"//*[contains(., '{base.cnpj}') and contains(., '{base.uf_cidade}') and contains(., '{base.ponto_entrega}')]",
+        f"//*[contains(., '{base.cnpj}') and contains(., '{base.ponto_entrega}')]",
+        f"//*[contains(., '{base.cnpj}') and contains(., '{base.uf_cidade}') ]",
+        f"//*[contains(., '{base.cnpj}')]",
+    ]
 
-    botao = card.find_element(By.XPATH, ".//button[contains(., 'Trocar')]")
-    driver.execute_script("arguments[0].click();", botao)
+    card = None
+    for xp in xpath_cards:
+        try:
+            card = w.until(EC.visibility_of_element_located((By.XPATH, xp)))
+            if card is not None:
+                break
+        except Exception:
+            continue
+
+    if card is None:
+        raise RuntimeError(f"Card da base não encontrado para o CNPJ {base.cnpj}.")
+
+    botoes_trocar = card.find_elements(By.XPATH, ".//button[contains(., 'Trocar') or contains(., 'Selecionar')]")
+    if not botoes_trocar:
+        raise RuntimeError(f"Botão de troca não encontrado no card do CNPJ {base.cnpj}.")
+
+    driver.execute_script("arguments[0].click();", botoes_trocar[0])
     time.sleep(4)
 
 

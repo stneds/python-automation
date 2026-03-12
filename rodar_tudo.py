@@ -9,11 +9,14 @@ from google.oauth2.service_account import Credentials
 from gspread.utils import rowcol_to_a1
 
 
+
+
 # =========================================================
 # CONFIGURAÇÕES
 # =========================================================
 ARQUIVO_JSON_GOOGLE = "dados-google.json"
-NOME_ARQUIVO_MODELO = "Preço teste TRRs %m/%y"
+NOME_ARQUIVO_MODELO = "Preço TRRs %m/%y"
+ID_PLANILHA_OFICIAL = "1Va1byiasuU-k9dCDmY9mcsUzvlFXmVTCBfuL9IaJq9Y" 
 INTERVALO_LEITURA = "A1:U1000"
 
 SCOPES = [
@@ -41,17 +44,16 @@ def conectar_cliente():
 
 def abrir_planilha_do_mes():
     client, email_servico = conectar_cliente()
-    nome_arquivo = datetime.now().strftime(NOME_ARQUIVO_MODELO)
 
     print("🔐 Conta de serviço:", email_servico)
-    print("🔎 Procurando arquivo do mês:", nome_arquivo)
+    print(f"🔎 Abrindo planilha oficial por ID: {ID_PLANILHA_OFICIAL}")
 
     try:
-        ss = client.open(nome_arquivo)
+        ss = client.open_by_key(ID_PLANILHA_OFICIAL)
         print("✅ Arquivo encontrado:", ss.title)
         return ss
     except Exception as e:
-        print(f"❌ Não foi possível abrir o arquivo do mês: {nome_arquivo}")
+        print(f"❌ Não foi possível abrir o arquivo do mês: {ID_PLANILHA_OFICIAL}")
         print("Detalhe:", repr(e))
         return None
 

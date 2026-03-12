@@ -13,7 +13,7 @@ from selenium.webdriver.support import expected_conditions as EC
 # --- CONFIGURAÇÕES ---
 data_hoje = datetime.now().strftime("%d-%m") 
 # Usando o ID da planilha oficial para garantir a gravação
-ID_PLANILHA_OFICIAL = "1T8p8RlKpuXOTuOjJCtLlBxLDNzwGRgZ6Li6IbPuChuE" 
+ID_PLANILHA_OFICIAL = "1Va1byiasuU-k9dCDmY9mcsUzvlFXmVTCBfuL9IaJq9Y" 
 NOME_ABA_HOJE = f"Preço {data_hoje}"
 ABA_MODELO = "Preço 20-01" 
 ARQUIVO_JSON_GOOGLE = "dados-google.json"
